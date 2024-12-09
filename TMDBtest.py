@@ -58,6 +58,9 @@ def get_movie_details_with_crew_and_cast(api_key, movie_id):
         title = movie_data.get('title', 'タイトル不明')
         overview = movie_data.get('overview', '概要なし')
         release_date = movie_data.get('release_date', 'リリース日不明')
+        runtime = movie_data.get('runtime', 0)  # 映画の長さ（分）
+        hours, minutes = divmod(runtime, 60)  # 分を「時間:分」に変換
+        runtime_str = f"{hours}時間 {minutes}分" if runtime > 0 else "情報なし"
         poster_path = movie_data.get('poster_path')
         poster_url = f"{base_url}{poster_size}{poster_path}" if poster_path else "ポスター画像が見つかりませんでした。"
         
@@ -84,6 +87,7 @@ def get_movie_details_with_crew_and_cast(api_key, movie_id):
             "title": title,
             "overview": overview,
             "release_date": release_date,
+            "runtime": runtime_str,  # 映画の長さ（文字列形式）
             "poster_url": poster_url,
             "crew": crew,
             "cast": cast
@@ -114,6 +118,7 @@ if movie_title:
                 st.image(movie_details["poster_url"], width=300)
                 st.write(f"**概要:** {movie_details['overview']}")
                 st.write(f"**リリース日:** {movie_details['release_date']}")
+                st.write(f"**映画の長さ:** {movie_details['runtime']}")  # 映画の長さを表示
                 
                 st.write("### 製作者")
                 for member in movie_details["crew"]:
