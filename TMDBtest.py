@@ -100,7 +100,8 @@ def get_movie_details_with_crew_and_reviews(api_key, movie_id):
         return {"error": f"HTTPエラー: {e}"}
     except Exception as e:
         return {"error": f"エラー: {e}"}
-    # Streamlitアプリの構成
+
+# Streamlitアプリの構成
 st.title("映画情報検索アプリ")
 st.write("映画のタイトルを入力して、詳細情報を取得してください。")
 
@@ -113,6 +114,7 @@ if movie_title:
         if error:
             st.error(error)
         else:
+            st.write(f"**映画ID:** {movie_id}")  # 映画IDを表示
             movie_details = get_movie_details_with_crew_and_reviews(TMDB_API_KEY, movie_id)
             if "error" in movie_details:
                 st.error(movie_details["error"])
@@ -151,5 +153,6 @@ if movie_title:
                         st.write("---")
                 else:
                     st.write("レビューは見つかりませんでした。")
+
 
 
