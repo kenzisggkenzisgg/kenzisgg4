@@ -70,6 +70,8 @@ if movie_title:
             st.write(f" {detail_data.get('overview', 'N/A')}")
             st.write(f"**公開日**: {detail_data.get('release_date', 'N/A')}")
             st.write(f"**上映時間**: {detail_data.get('runtime', 'N/A')} 分")
+            st.write(f"**評価スコア** :{detail_data.get('vote_average', 'N/A')} /10")
+            st.write(f"**評価数** :{detail_data.get('vote_count', 'N/A')} 件")
 
 
             
@@ -130,4 +132,3 @@ if movie_title:
         st.write("None")
 else:
     st.write("") #説明なくてもよさそうなので空欄
-    
