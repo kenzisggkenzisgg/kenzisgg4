@@ -1,158 +1,133 @@
-import streamlit as st
 import requests
+import streamlit as st
+import difflib
 
-# TMDB APIキー
-TMDB_API_KEY = "054f72271ae8d8ea2beea5ae520ca6d2"
-
-def search_movie_by_title(api_key, movie_title):
-    """映画タイトルから映画IDを検索"""
-    search_url = "https://api.themoviedb.org/3/search/movie"
-    params = {
-        "api_key": api_key,
-        "query": movie_title,
-        "language": "ja"
-    }
-    try:
-        response = requests.get(search_url, params=params)
-        response.raise_for_status()
-        data = response.json()
-        
-        results = data.get("results", [])
-        if not results:
-            return None, "該当する映画が見つかりませんでした。"
-        
-        first_result = results[0]
-        return first_result.get("id"), None
-    except requests.exceptions.HTTPError as e:
-        return None, f"HTTPエラー: {e}"
-    except Exception as e:
-        return None, f"エラー: {e}"
-
-def get_movie_details_with_crew_and_reviews(api_key, movie_id):
-    """映画IDから詳細情報、製作者、出演俳優、レビュー情報を取得"""
-    movie_url = f"https://api.themoviedb.org/3/movie/{movie_id}"
-    credits_url = f"https://api.themoviedb.org/3/movie/{movie_id}/credits"
-    reviews_url = f"https://api.themoviedb.org/3/movie/{movie_id}/reviews"
-    movie_params = {"api_key": api_key, "language": "ja"}
-    credits_params = {"api_key": api_key, "language": "ja"}
-    
-    try:
-        # 映画の基本情報を取得
-        movie_response = requests.get(movie_url, params=movie_params)
-        movie_response.raise_for_status()
-        movie_data = movie_response.json()
-        
-        # 映画の出演者・製作者情報を取得
-        credits_response = requests.get(credits_url, params=credits_params)
-        credits_response.raise_for_status()
-        credits_data = credits_response.json()
-        
-        # 映画のレビュー情報を取得（まず日本語を試す）
-        reviews_params = {"api_key": api_key, "language": "ja"}
-        reviews_response = requests.get(reviews_url, params=reviews_params)
-        reviews_data = reviews_response.json()
-        reviews = reviews_data.get("results", [])
-        
-        # 日本語レビューがない場合、英語のレビューを試す
-        if not reviews:
-            reviews_params["language"] = "en-US"
-            reviews_response = requests.get(reviews_url, params=reviews_params)
-            reviews_data = reviews_response.json()
-            reviews = reviews_data.get("results", [])
-        
-        # 必要な情報を整理
-        details = {
-            "original_title": movie_data.get('original_title', '原題不明'),
-            "title": movie_data.get('title', 'タイトル不明'),
-            "overview": movie_data.get('overview', '概要なし'),
-            "release_date": movie_data.get('release_date', 'リリース日不明'),
-            "runtime": movie_data.get('runtime', 0),
-            "vote_average": movie_data.get('vote_average', 0.0),
-            "vote_count": movie_data.get('vote_count', 0),
-            "poster_path": movie_data.get('poster_path'),
-            "crew": [
-                {
-                    "name": member.get("name", "名前不明"),
-                    "job": member.get("job", "役割不明")
-                }
-                for member in credits_data.get("crew", [])
-                if member.get("job") in ["Director", "Screenplay", "Producer", "Writer"]
-            ],
-            "cast": [
-                {
-                    "name": actor.get("name", "名前不明"),
-                    "character": actor.get("character", "役柄不明"),
-                    "profile_url": f"https://image.tmdb.org/t/p/w500{actor.get('profile_path')}" if actor.get("profile_path") else "プロフィール画像なし"
-                }
-                for actor in credits_data.get("cast", [])[:5]
-            ],
-            "reviews": [
-                {
-                    "author": review.get("author", "匿名"),
-                    "content": review.get("content", "レビューなし")
-                }
-                for review in reviews[:3]  # 最大3件表示
-            ]
-        }
-        
-        return details
-    except requests.exceptions.HTTPError as e:
-        return {"error": f"HTTPエラー: {e}"}
-    except Exception as e:
-        return {"error": f"エラー: {e}"}
+# APIキーを指定
+api_key = "054f72271ae8d8ea2beea5ae520ca6d2"
 
 # Streamlitアプリの構成
 st.title("映画情報検索アプリ")
 st.write("映画のタイトルを入力して、詳細情報を取得してください。")
 
 # ユーザーが映画タイトルを入力
-movie_title = st.text_input("映画タイトルを入力してください:")
+movie_title = st.text_input("") #説明なくてもよさそうなので空欄
 
+#ユーザー入力前、APIリクエストをスキップするように条件分岐を追加
 if movie_title:
-    with st.spinner("検索中..."):
-        movie_id, error = search_movie_by_title(TMDB_API_KEY, movie_title)
-        if error:
-            st.error(error)
-        else:
-            st.write(f"**映画ID:** {movie_id}")  # 映画IDを表示
-            movie_details = get_movie_details_with_crew_and_reviews(TMDB_API_KEY, movie_id)
-            if "error" in movie_details:
-                st.error(movie_details["error"])
-            else:
-                st.subheader(f"{movie_details['title']} ({movie_details['original_title']})")
-                poster_url = (
-                    f"https://image.tmdb.org/t/p/w500{movie_details['poster_path']}"
-                    if movie_details['poster_path'] else "ポスター画像が見つかりませんでした。"
-                )
-                st.image(poster_url, width=300)
-                st.write(f"**概要:** {movie_details['overview']}")
-                st.write(f"**リリース日:** {movie_details['release_date']}")
-                runtime = movie_details["runtime"]
-                hours, minutes = divmod(runtime, 60)
-                runtime_str = f"{hours}時間 {minutes}分" if runtime > 0 else "情報なし"
-                st.write(f"**映画の長さ:** {runtime_str}")
-                st.write(f"**評価スコア:** {movie_details['vote_average']} / 10")
-                st.write(f"**評価数:** {movie_details['vote_count']}件")
-                
-                st.write("### 製作者")
-                for member in movie_details["crew"]:
-                    st.write(f"- {member['job']}: {member['name']}")
-                
-                st.write("### 主演俳優")
-                for actor in movie_details["cast"]:
-                    st.write(f"- {actor['name']} ({actor['character']})")
-                    if actor["profile_url"] != "プロフィール画像なし":
-                        st.image(actor["profile_url"], width=100)
-                
-                st.write("### レビュー")
-                reviews = movie_details["reviews"]
-                if reviews:
-                    for idx, review in enumerate(reviews, start=1):
-                        st.write(f"**{idx}. {review['author']}さんのレビュー:**")
-                        st.write(f"{review['content']}")
-                        st.write("---")
+    title = movie_title
+
+    # APIのURLを生成
+    search_url = "https://api.themoviedb.org/3/search/movie"
+    search_params = {
+        "api_key": api_key,
+        "query": title,
+        "include_adult": "false",
+        "language": "ja",
+    }
+
+    # APIを呼び出す(映画ID取得用)
+    search_response = requests.get(search_url, params=search_params)
+    if search_response.status_code == 200:
+        search_data = search_response.json()
+
+        # タイトルの類似度を評価して最も近い映画を選択
+        def get_title_similarity(s1, s2):
+            return difflib.SequenceMatcher(None, s1.lower(), s2.lower()).ratio()
+
+        most_similar_movie = max(
+            search_data["results"],
+            key=lambda movie: get_title_similarity(movie["title"], title)
+        )
+        movie_id = most_similar_movie["id"]
+
+        # 映画詳細情報の取得
+        detail_url = f"https://api.themoviedb.org/3/movie/{movie_id}"
+        detail_params = {"api_key": api_key, "language": "ja"}
+        detail_response = requests.get(detail_url, params=detail_params)
+        if detail_response.status_code == 200:
+            detail_data = detail_response.json()
+            
+              # ポスター情報の取得
+            images_url = f"https://api.themoviedb.org/3/movie/{movie_id}/images"
+            poster_size = "w300" 
+
+            images_params = {
+                "api_key": api_key, 
+                "include_image_language": "ja",
+            }   
+            images_response = requests.get(images_url, images_params)
+            if images_response.status_code == 200:
+                images_data = images_response.json()
+                posters = images_data.get("posters", [])
+                if posters:
+                    file_path = posters[0].get("file_path")
+                    full_image_url = f"https://image.tmdb.org/t/p/{poster_size}{file_path}"  # フルURLを構築st.write("### 映画情報")
+                    
+            #映画情報とポスターを表示
+            st.subheader(f"{detail_data['title']} ({detail_data['original_title']})")
+            if full_image_url:
+                st.image(full_image_url)
+            st.write(f" {detail_data.get('overview', 'N/A')}")
+            st.write(f"**公開日**: {detail_data.get('release_date', 'N/A')}")
+            st.write(f"**上映時間**: {detail_data.get('runtime', 'N/A')} 分")
+
+
+            
+        # 製作者、キャスト情報の取得
+        credits_url = f"https://api.themoviedb.org/3/movie/{movie_id}/credits"
+        credits_params = {"api_key": api_key, "language": "ja"}
+        credits_response = requests.get(credits_url, params=credits_params)
+        if credits_response.status_code == 200:
+            credits_data = credits_response.json()
+            
+            st.write("### 製作者情報")
+            crew = credits_data.get("crew", []) 
+            filtered_roles = ["Director", "Screenplay", "Producer", "Writer", "Composer"]
+            filtered_crew = [
+            member for member in crew if member.get("job") in filtered_roles
+            ]
+            for member in filtered_crew[:5]:  # 上位5人まで
+                name = member.get("name", "N/A")
+                job = member.get("job", "N/A")
+                st.write(f"- {job}:{name}")
+
+            st.write("### キャスト情報")
+            cast = credits_data.get("cast", [])
+            for actor in cast[:5]:
+                name = actor.get("name", "N/A")
+                character = actor.get("character", "N/A")
+                profile_path = actor.get("profile_path", None)
+                st.write((f"- {name} ( {character} )"))
+                if profile_path:
+                    profile_url = f"https://image.tmdb.org/t/p/w200{profile_path}"
+                    st.image(profile_url,width=100)  
+                    #画像サイズが大きかったので調整（url部分を直そうとしたらエラーとなったので、ここで調整）
                 else:
-                    st.write("レビューは見つかりませんでした。")
+                    st.write("(No image available)")
 
+    else:
+        st.write("映画情報の取得に失敗しました。")
+   
+    #　レビュー情報の取得
+    reviews_url = f"https://api.themoviedb.org/3/movie/{movie_id}/reviews"
+    reviews_params = {
+        "api_key": api_key, 
+        "language": "en-US",
+    }    
+    
+    reviews_response = requests.get(reviews_url, params= reviews_params)
 
-
+    reviews_data = reviews_response.json()
+    reviews = reviews_data.get("results",[])
+    if reviews:
+        st.write("### レビュー")
+        for review in reviews[:3]: 
+            author = review.get("author", "Unknown")
+            content = review.get("content", "No content")
+            st.write(f"**Reviewer :  {author}さんのレビュー**")
+            st.write(f"Review :  {content}\n")
+    else:
+        st.write("None")
+else:
+    st.write("") #説明なくてもよさそうなので空欄
+    
